@@ -18,28 +18,26 @@ jobs:
         with:
           cmake-version: "4.0.3"
 
-      - name: Setup vcpkg and install libflac
+      - name: Setup vcpkg and install FLAC packages
         shell: pwsh
-        env:
-          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
         run: |
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          Write-Host "vcpkg root: $vcpkgRoot"
+          Write-Host "Cloning vcpkg to $vcpkgRoot"
           git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
           Push-Location $vcpkgRoot
-          # bootstrap the native vcpkg executable using the batch script (avoids PowerShell param issues)
+          Write-Host "Bootstrapping vcpkg (batch bootstrap)"
           .\bootstrap-vcpkg.bat
-          # install the libflac port; use explicit --triplet form to avoid ambiguous switches
+          Write-Host "Installing libflac and libflac++ for x64-windows (triplet x64-windows)"
           .\vcpkg.exe install libflac --triplet x64-windows
+          # attempt to install libflac++ port as well if available
+          .\vcpkg.exe install libflac++ --triplet x64-windows || Write-Host "libflac++ port not available; continuing"
           Pop-Location
 
       - name: Configure with CMake (using vcpkg)
         shell: pwsh
-        env:
-          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
         run: |
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          Write-Host "Using vcpkg toolchain at: $vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
+          Write-Host "Using vcpkg toolchain: $vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
           New-Item -ItemType Directory -Path build -Force | Out-Null
           Push-Location build
           cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
