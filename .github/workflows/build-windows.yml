@@ -19,7 +19,7 @@ jobs:
         with:
           cmake-version: "4.0.3"
 
-      - name: Setup vcpkg
+      - name: Setup vcpkg and install libflac
         run: |
           git clone https://github.com/microsoft/vcpkg.git "%VCPKG_ROOT%"
           pushd "%VCPKG_ROOT%"
@@ -43,8 +43,12 @@ jobs:
           mkdir artifact
           if exist build\Release\mqa_identifier.exe (
             copy build\Release\mqa_identifier.exe artifact\mqa_identifier.exe
-          ) else (
+          ) else if exist build\mqa_identifier.exe (
             copy build\mqa_identifier.exe artifact\mqa_identifier.exe
+          ) else (
+            echo "ERROR: executable not found; listing build directory:"
+            dir build
+            exit 1
           )
 
       - name: Upload artifact
