@@ -1,0 +1,40 @@
+name: Build MQA Identifier Windows EXE
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install CMake
+        uses: lukka/get-cmake@v4
+        with:
+          cmakeVersion: "3.30.0"
+
+      - name: Configure with CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release -- /m
+
+      - name: Collect artifact
+        run: |
+          mkdir -p artifact
+          copy build\Release\mqa_identifier.exe artifact\mqa_identifier.exe || copy build\mqa_identifier.exe artifact\mqa_identifier.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqa-identifier-windows
+          path: artifact\mqa_identifier.exe
