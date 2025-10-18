@@ -20,20 +20,26 @@ jobs:
 
       - name: Setup vcpkg and install libflac
         shell: pwsh
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
         run: |
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          Write-Host "vcpkg root: $vcpkgRoot"
           git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
           Push-Location $vcpkgRoot
-          # Run the bootstrap script without extra args to avoid PowerShell named-parameter error
+          # bootstrap the native vcpkg executable using the batch script (avoids PowerShell param issues)
           .\bootstrap-vcpkg.bat
-          # Disable telemetry for subsequent vcpkg calls by setting the env var when invoking vcpkg.exe
-          .\vcpkg.exe install libflac:x64-windows --triplet x64-windows --disableMetrics
+          # install the libflac port; use explicit --triplet form to avoid ambiguous switches
+          .\vcpkg.exe install libflac --triplet x64-windows
           Pop-Location
 
       - name: Configure with CMake (using vcpkg)
         shell: pwsh
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
         run: |
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          Write-Host "Using vcpkg toolchain at: $vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
           New-Item -ItemType Directory -Path build -Force | Out-Null
           Push-Location build
           cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
