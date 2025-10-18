@@ -8,20 +8,30 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      VCPKG_ROOT: ${{ runner.temp }}\vcpkg
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install CMake
-        uses: lukka/get-cmake@v4.0.3
+        uses: kitware/setup-cmake@v3
         with:
-          cmakeVersion: "4.0.3"
+          cmake-version: "4.0.3"
 
-      - name: Configure with CMake
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "%VCPKG_ROOT%"
+          pushd "%VCPKG_ROOT%"
+          .\bootstrap-vcpkg.bat
+          .\vcpkg.exe install flac:x64-windows
+          popd
+
+      - name: Configure with CMake (using vcpkg)
         run: |
           mkdir build
           cd build
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\\scripts\\buildsystems\\vcpkg.cmake"
 
       - name: Build
         run: |
@@ -30,8 +40,12 @@ jobs:
 
       - name: Collect artifact
         run: |
-          mkdir -p artifact
-          copy build\Release\mqa_identifier.exe artifact\mqa_identifier.exe || copy build\mqa_identifier.exe artifact\mqa_identifier.exe
+          mkdir artifact
+          if exist build\Release\mqa_identifier.exe (
+            copy build\Release\mqa_identifier.exe artifact\mqa_identifier.exe
+          ) else (
+            copy build\mqa_identifier.exe artifact\mqa_identifier.exe
+          )
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
