@@ -8,8 +8,7 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    env:
-      VCPKG_ROOT: ${{ runner.temp }}\vcpkg
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,36 +19,44 @@ jobs:
           cmake-version: "4.0.3"
 
       - name: Setup vcpkg and install libflac
+        shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git "%VCPKG_ROOT%"
-          pushd "%VCPKG_ROOT%"
+          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+          Push-Location $vcpkgRoot
           .\bootstrap-vcpkg.bat
           .\vcpkg.exe install flac:x64-windows
-          popd
+          Pop-Location
 
       - name: Configure with CMake (using vcpkg)
+        shell: pwsh
         run: |
-          mkdir build
-          cd build
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\\scripts\\buildsystems\\vcpkg.cmake"
+          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          New-Item -ItemType Directory -Path build -Force | Out-Null
+          Push-Location build
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
+          Pop-Location
 
       - name: Build
+        shell: pwsh
         run: |
-          cd build
+          Push-Location build
           cmake --build . --config Release -- /m
+          Pop-Location
 
       - name: Collect artifact
+        shell: pwsh
         run: |
-          mkdir artifact
-          if exist build\Release\mqa_identifier.exe (
-            copy build\Release\mqa_identifier.exe artifact\mqa_identifier.exe
-          ) else if exist build\mqa_identifier.exe (
-            copy build\mqa_identifier.exe artifact\mqa_identifier.exe
-          ) else (
-            echo "ERROR: executable not found; listing build directory:"
-            dir build
+          New-Item -ItemType Directory -Path artifact -Force | Out-Null
+          if (Test-Path "build\Release\mqa_identifier.exe") {
+            Copy-Item "build\Release\mqa_identifier.exe" "artifact\mqa_identifier.exe"
+          } elseif (Test-Path "build\mqa_identifier.exe") {
+            Copy-Item "build\mqa_identifier.exe" "artifact\mqa_identifier.exe"
+          } else {
+            Write-Host "ERROR: executable not found; listing build directory:"
+            Get-ChildItem -Recurse build | ForEach-Object { Write-Host $_.FullName }
             exit 1
-          )
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
