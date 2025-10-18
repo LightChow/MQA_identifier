@@ -24,9 +24,10 @@ jobs:
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
           Push-Location $vcpkgRoot
-          .\bootstrap-vcpkg.bat --disableMetrics
-          # install libflac (vcpkg port name is libflac)
-          .\vcpkg.exe install libflac:x64-windows
+          # Run the bootstrap script without extra args to avoid PowerShell named-parameter error
+          .\bootstrap-vcpkg.bat
+          # Disable telemetry for subsequent vcpkg calls by setting the env var when invoking vcpkg.exe
+          .\vcpkg.exe install libflac:x64-windows --triplet x64-windows --disableMetrics
           Pop-Location
 
       - name: Configure with CMake (using vcpkg)
