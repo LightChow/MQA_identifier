@@ -24,8 +24,9 @@ jobs:
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
           Push-Location $vcpkgRoot
-          .\bootstrap-vcpkg.bat
-          .\vcpkg.exe install flac:x64-windows
+          .\bootstrap-vcpkg.bat --disableMetrics
+          # install libflac (vcpkg port name is libflac)
+          .\vcpkg.exe install libflac:x64-windows
           Pop-Location
 
       - name: Configure with CMake (using vcpkg)
