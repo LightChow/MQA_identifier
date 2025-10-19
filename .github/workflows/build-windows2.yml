@@ -21,11 +21,6 @@ jobs:
           .\vcpkg\vcpkg.exe install libflac:x64-windows
         shell: cmd
 
-      - name: Install FLAC (vcpkg)
-        run: |
-          .\vcpkg\vcpkg.exe install libflac:x64-windows
-        shell: cmd
-
       - name: Show installed FLAC files (debug)
         run: |
           echo Installed files in vcpkg\installed\x64-windows\include
@@ -76,30 +71,34 @@ jobs:
           dir /b /s *FLAC*.dll || echo none
         shell: cmd
 
-      - name: Prepare artifact folder (include vcpkg DLLs)
+      - name: Prepare artifact folder (copy EXE + FLAC DLLs)
         run: |
           mkdir output
 
-          rem copy EXE from common locations (adjust names if different)
+          rem copy EXE from common locations
           if exist build\Release\MQA_identifier.exe copy build\Release\MQA_identifier.exe output\ || echo no-exe-in-build-Release
           if exist build\MQA_identifier.exe copy build\MQA_identifier.exe output\ || echo no-exe-in-build_root
           if exist MQA_identifier.exe copy MQA_identifier.exe output\ || echo no-exe-in-repo-root
 
-          rem copy DLLs next to the EXE if present in build\Release
-          for %%f in (build\Release\*.dll) do copy %%f output\  || echo no-dlls-in-build-release
+          rem copy DLLs from build Release
+          for %%f in (build\Release\FLAC*.dll) do copy "%%f" output\ 2>nul || echo no-flac-dlls-in-build-release
 
-          rem copy vcpkg runtime DLLs (FLAC++, FLAC, ogg etc.) from vcpkg installed bin
+          rem copy runtime DLLs from vcpkg installed bin and debug bin
           if exist vcpkg\installed\x64-windows\bin (
-            for %%f in (vcpkg\installed\x64-windows\bin\*.dll) do copy %%f output\  || echo no-dlls-in-vcpkg-bin
-          ) else (
-            echo "vcpkg installed bin not found"
+            for %%f in (vcpkg\installed\x64-windows\bin\FLAC*.dll) do copy "%%f" output\ 2>nul || echo no-flac-dlls-in-vcpkg-installed-bin
+          )
+          if exist vcpkg\installed\x64-windows\debug\bin (
+            for %%f in (vcpkg\installed\x64-windows\debug\bin\FLAC*.dll) do copy "%%f" output\ 2>nul || echo no-flac-dlls-in-vcpkg-installed-debug-bin
           )
 
-          rem also copy libs if any needed for inspection
-          if exist vcpkg\installed\x64-windows\lib (
-            copy vcpkg\installed\x64-windows\lib\FLAC++.lib output\ 2>nul || echo no-flacpp-lib
-            copy vcpkg\installed\x64-windows\lib\FLAC.lib output\ 2>nul || echo no-flac-lib
+          rem copy from vcpkg package folders (where vcpkg may have placed DLLs)
+          if exist vcpkg\packages (
+            for /f "delims=" %%p in ('dir /b /s vcpkg\packages\*libflac*\bin\FLAC*.dll 2^>nul') do copy "%%p" output\ 2>nul || echo none
+            for /f "delims=" %%p in ('dir /b /s vcpkg\packages\*libflac*\debug\bin\FLAC*.dll 2^>nul') do copy "%%p" output\ 2>nul || echo none
           )
+
+          rem show what we will upload
+          dir output
         shell: cmd
 
       - name: Upload artifact (full output)
