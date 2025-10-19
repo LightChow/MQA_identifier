@@ -8,6 +8,11 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      VCPKG_ROOT: ${{ runner.temp }}\vcpkg
+      # Ensure MSVC sees vcpkg-installed headers and libraries
+      INCLUDE: ${{ runner.temp }}\vcpkg\installed\x64-windows\include
+      LIB: ${{ runner.temp }}\vcpkg\installed\x64-windows\lib
 
     steps:
       - name: Checkout repository
@@ -18,10 +23,8 @@ jobs:
         with:
           cmake-version: "4.0.3"
 
-      - name: "Setup vcpkg and install libflac"
+      - name: Setup vcpkg and install libflac
         shell: pwsh
-        env:
-          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
         run: |
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           Write-Host "Cloning vcpkg to: $vcpkgRoot"
@@ -40,45 +43,30 @@ jobs:
             exit $LASTEXITCODE
           }
           Write-Host "vcpkg installed packages at: $vcpkgRoot\installed\x64-windows"
-          Write-Host "Listing installed include files (please copy these lines if the build still fails):"
+          Write-Host "Installed include files (top-level):"
           Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
           Pop-Location
 
-      - name: "Configure with CMake (vcpkg toolchain + forced include/link flags)"
+      - name: Configure with CMake (using vcpkg toolchain)
         shell: pwsh
-        env:
-          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
         run: |
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           $toolchain = Join-Path $vcpkgRoot 'scripts\buildsystems\vcpkg.cmake'
           Write-Host "Using vcpkg toolchain: $toolchain"
           New-Item -ItemType Directory -Path build -Force | Out-Null
           Push-Location build
-          $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
-          $includePath = Join-Path $prefix 'include'
-          $libPath = Join-Path $prefix 'lib'
-          $flacShare = Join-Path $prefix 'share\flac'
-          Write-Host 'CMAKE_PREFIX_PATH = ' $prefix
-          Write-Host 'CMAKE_INCLUDE_PATH = ' $includePath
-          Write-Host 'CMAKE_LIBRARY_PATH = ' $libPath
-          Write-Host 'FLAC_DIR = ' $flacShare
-          # Force MSVC to see vcpkg include dir and add the vcpkg lib path to the linker search path
-          $msvcI = "/I`"$includePath`""
-          $linkFlags = "/LIBPATH:`"$libPath`""
-          $cxxFlags = $msvcI
-          $cFlags  = $msvcI
-          cmake .. -A x64 -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_INCLUDE_PATH="$includePath" -DCMAKE_LIBRARY_PATH="$libPath" -DFLAC_DIR="$flacShare" -DCMAKE_C_FLAGS="$cFlags" -DCMAKE_CXX_FLAGS="$cxxFlags" -DCMAKE_EXE_LINKER_FLAGS="$linkFlags" -DCMAKE_SHARED_LINKER_FLAGS="$linkFlags"
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows"
           if ($LASTEXITCODE -ne 0) {
-            Write-Host 'CMake configure failed. Printing CMake output logs if present.'
+            Write-Host 'CMake configure failed. Printing logs if present.'
             if (Test-Path 'CMakeFiles\CMakeError.log') { Get-Content 'CMakeFiles\CMakeError.log' | ForEach-Object { Write-Host $_ } }
             if (Test-Path 'CMakeFiles\CMakeOutput.log') { Get-Content 'CMakeFiles\CMakeOutput.log' | ForEach-Object { Write-Host $_ } }
             exit $LASTEXITCODE
           }
-          Write-Host 'CMake configure succeeded. Show FLAC-related CMakeCache entries (if present):'
+          Write-Host 'CMake configure succeeded. Showing FLAC-related CMakeCache entries (if present):'
           if (Test-Path 'CMakeCache.txt') { Select-String -Path CMakeCache.txt -Pattern FLAC -SimpleMatch | ForEach-Object { Write-Host $_ } }
           Pop-Location
 
-      - name: "Diagnostic - show build files and generated project info"
+      - name: Diagnostic - show generated project info
         shell: pwsh
         run: |
           if (Test-Path build) {
@@ -89,7 +77,7 @@ jobs:
               Write-Host 'Project file found:' $proj.FullName
               Write-Host 'Searching for AdditionalIncludeDirectories in project file:'
               Select-String -Path $proj.FullName -Pattern 'AdditionalIncludeDirectories' -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
-              Write-Host 'Searching for LinkLibraryDependencies or AdditionalDependencies in project file:'
+              Write-Host 'Searching for AdditionalDependencies in project file:'
               Select-String -Path $proj.FullName -Pattern 'AdditionalDependencies' -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
             } else {
               Write-Host 'No .vcxproj found yet.'
@@ -98,14 +86,14 @@ jobs:
             Write-Host 'No build directory present.'
           }
 
-      - name: "Build"
+      - name: Build
         shell: pwsh
         run: |
           Push-Location build
           cmake --build . --config Release -- /m
           Pop-Location
 
-      - name: "Collect artifact"
+      - name: Collect artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifact -Force | Out-Null
@@ -119,7 +107,7 @@ jobs:
             exit 1
           }
 
-      - name: "Upload artifact"
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: mqa-identifier-windows
