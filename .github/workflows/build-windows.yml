@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup CMake
+      - name: "Setup CMake"
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: "4.0.3"
@@ -44,7 +44,7 @@ jobs:
           Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
           Pop-Location
 
-      - name: "Configure with CMake (using vcpkg toolchain)"
+      - name: "Configure with CMake (using vcpkg toolchain and explicit include/lib hints)"
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
@@ -55,10 +55,15 @@ jobs:
           New-Item -ItemType Directory -Path build -Force | Out-Null
           Push-Location build
           $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
+          $includePath = Join-Path $prefix 'include'
+          $libPath = Join-Path $prefix 'lib'
           $flacShare = Join-Path $prefix 'share\flac'
           Write-Host 'CMAKE_PREFIX_PATH = ' $prefix
+          Write-Host 'CMAKE_INCLUDE_PATH = ' $includePath
+          Write-Host 'CMAKE_LIBRARY_PATH = ' $libPath
           Write-Host 'FLAC_DIR = ' $flacShare
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$prefix" -DFLAC_DIR="$flacShare"
+          # Pass vcpkg toolchain plus explicit include/lib paths and CMAKE_PREFIX_PATH to help find FLAC++ headers
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_INCLUDE_PATH="$includePath" -DCMAKE_LIBRARY_PATH="$libPath" -DFLAC_DIR="$flacShare"
           if ($LASTEXITCODE -ne 0) {
             Write-Host 'CMake configure failed. Printing CMake output files for diagnosis (if present).'
             if (Test-Path 'CMakeFiles\CMakeError.log') { Get-Content 'CMakeFiles\CMakeError.log' | ForEach-Object { Write-Host $_ } }
@@ -87,14 +92,14 @@ jobs:
             Write-Host 'No build directory present.'
           }
 
-      - name: Build
+      - name: "Build"
         shell: pwsh
         run: |
           Push-Location build
           cmake --build . --config Release -- /m
           Pop-Location
 
-      - name: Collect artifact
+      - name: "Collect artifact"
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifact -Force | Out-Null
@@ -108,7 +113,7 @@ jobs:
             exit 1
           }
 
-      - name: Upload artifact
+      - name: "Upload artifact"
         uses: actions/upload-artifact@v4
         with:
           name: mqa-identifier-windows
