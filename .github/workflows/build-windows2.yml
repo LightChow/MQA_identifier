@@ -91,11 +91,23 @@ jobs:
       - name: Find any FLAC DLLs (debug)
         run: |
           echo "search vcpkg installed bin (dynamic)"
-          dir /b /s vcpkg\installed\x64-windows\bin\*FLAC*.dll 2>nul || echo none
+          if exist vcpkg\installed\x64-windows\bin\*FLAC*.dll (
+            dir /b /s vcpkg\installed\x64-windows\bin\*FLAC*.dll
+          ) else (
+            echo none
+          )
           echo "search vcpkg installed bin (static)"
-          dir /b /s vcpkg\installed\x64-windows-static\bin\*FLAC*.dll 2>nul || echo none
+          if exist vcpkg\installed\x64-windows-static\bin\*FLAC*.dll (
+            dir /b /s vcpkg\installed\x64-windows-static\bin\*FLAC*.dll
+          ) else (
+            echo none
+          )
           echo "search repo tree"
-          dir /b /s *FLAC*.dll 2>nul || echo none
+          if exist *FLAC*.dll (
+            dir /b /s *FLAC*.dll
+          ) else (
+            echo none
+          )
         shell: cmd
 
       - name: Prepare artifact folder (static build)
