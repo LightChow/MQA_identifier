@@ -77,8 +77,13 @@ jobs:
           )
         shell: cmd
 
-      - name: Build Release
-        run: cmake --build build --config Release -- /m
+      - name: Build Release (use vcpkg LIB/INCLUDE)
+        run: |
+          set VCPKG_INST=%CD%\vcpkg\installed\x64-windows-static
+          rem prepend vcpkg lib and include to LIB and INCLUDE for MSVC linker/compiler
+          set LIB=%VCPKG_INST%\lib;%LIB%
+          set INCLUDE=%VCPKG_INST%\include;%INCLUDE%
+          cmake --build build --config Release -- /m
         shell: cmd
 
       - name: Find any FLAC DLLs (debug)
