@@ -16,36 +16,21 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: Install FLAC (vcpkg)
+      - name: Install libFLAC (static) with vcpkg
         run: |
-          .\vcpkg\vcpkg.exe install libflac:x64-windows
+          .\vcpkg\vcpkg.exe install libflac:x64-windows-static
         shell: cmd
 
-      - name: Show installed FLAC files (debug)
-        run: |
-          echo Installed files in vcpkg\installed\x64-windows\include
-          dir /b /s vcpkg\installed\x64-windows\include\FLAC*
-          echo Installed lib files in vcpkg\installed\x64-windows\lib
-          dir /b /s vcpkg\installed\x64-windows\lib\*
-        shell: cmd
-
-      - name: Configure Release build (force include and link)
+      - name: Configure build (static linking)
         run: |
           set VCPKG_DIR=%CD%\vcpkg
-          set VCPKG_INST=%VCPKG_DIR%\installed\x64-windows
+          set VCPKG_INST=%VCPKG_DIR%\installed\x64-windows-static
           cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_TOOLCHAIN_FILE=%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake ^
-            -DFLAC_INCLUDE_DIR="%VCPKG_INST%\include" ^
-            -DFLACPP_INCLUDE_DIR="%VCPKG_INST%\include" ^
-            -DFLACPP_INCLUDE_DIRS="%VCPKG_INST%\include" ^
-            -DFLACPP_LIBRARY="%VCPKG_INST%\lib\FLAC++.lib" ^
-            -DFLAC++_LIBRARIES="%VCPKG_INST%\lib\FLAC++.lib" ^
-            -DFLAC_LIBRARY="%VCPKG_INST%\lib\FLAC.lib" ^
-            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:%VCPKG_INST%\lib" ^
-            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:%VCPKG_INST%\lib" ^
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static ^
+            -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF ^
             -DCMAKE_CXX_FLAGS="/I%VCPKG_INST%\include" ^
-            -DCMAKE_CXX_FLAGS_RELEASE="/I%VCPKG_INST%\include" ^
-            -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
+            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:%VCPKG_INST%\lib"
         shell: cmd
 
       - name: Dump CMake cache for FLAC
