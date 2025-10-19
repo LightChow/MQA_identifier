@@ -26,8 +26,8 @@ jobs:
         run: |
           if exist build rmdir /s /q build
         shell: cmd
-
-      - name: Configure build (static linking) with forced includes
+        
+      - name: Configure build (static linking) with forced linker paths
         run: |
           set VCPKG_DIR=%CD%\vcpkg
           set VCPKG_INST=%VCPKG_DIR%\installed\x64-windows-static
@@ -36,15 +36,23 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake ^
             -DVCPKG_TARGET_TRIPLET=x64-windows-static ^
             -DFLACPP_INCLUDE_DIR="%VCPKG_INST%\include" ^
-            -DFLACPP_INCLUDE_DIRS="%VCPKG_INST%\include" ^
-            -DFLAC++_INCLUDE_DIR="%VCPKG_INST%\include" ^
-            -DFLAC++_INCLUDES="%VCPKG_INST%\include" ^
             -DFLAC_INCLUDE_DIR="%VCPKG_INST%\include" ^
+            -DFLACPP_LIBRARY="%VCPKG_INST%\lib\FLAC++.lib" ^
+            -DFLACPP_LIBRARIES="%VCPKG_INST%\lib\FLAC++.lib" ^
+            -DFLAC_LIBRARY="%VCPKG_INST%\lib\FLAC.lib" ^
+            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:%VCPKG_INST%\lib" ^
+            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:%VCPKG_INST%\lib" ^
+            -DCMAKE_MODULE_LINKER_FLAGS="/LIBPATH:%VCPKG_INST%\lib" ^
             -DCMAKE_CXX_FLAGS="/I%VCPKG_INST%\include" ^
             -DCMAKE_CXX_FLAGS_RELEASE="/I%VCPKG_INST%\include" ^
-            -DFLACPP_LIBRARY="%VCPKG_INST%\lib\FLAC++.lib" ^
-            -DFLAC_LIBRARY="%VCPKG_INST%\lib\FLAC.lib" ^
             -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
+        shell: cmd
+        
+      - name: Verify linker flags and FLAC settings
+        run: |
+          cmake -S . -B build -LA | findstr /I "FLAC"
+          findstr /I "/LIBPATH" build\MQA_identifier.vcxproj || echo "/LIBPATH not found in vcxproj"
+          findstr /I "FLAC++.lib" build\MQA_identifier.vcxproj || echo "FLAC++.lib not referenced in vcxproj"
         shell: cmd
 
       - name: Show vcpkg include dir (debug)
