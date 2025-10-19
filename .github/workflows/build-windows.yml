@@ -52,29 +52,29 @@ jobs:
         run: |
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
-          $includePath = (Join-Path $prefix 'include') -replace '\\','\\'
-          $libPath = (Join-Path $prefix 'lib') -replace '\\','\\'
+          $includePath = Join-Path $prefix 'include'
+          $libPath = Join-Path $prefix 'lib'
           $flacLib = Join-Path $libPath 'FLAC++.lib'
           Write-Host "Patching project to add include: $includePath and lib: $flacLib"
 
           $projPath = Get-ChildItem -Path build -Filter 'MQA_identifier.vcxproj' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $projPath) { Write-Host "Could not find MQA_identifier.vcxproj in build; aborting patch"; exit 1 }
-          $proj = Get-Content $projPath.FullName
 
-          # Add include to AdditionalIncludeDirectories inside each ItemDefinitionGroup/ClCompile
-          $projText = $proj -join "`n"
-          # If AdditionalIncludeDirectories exists, append; else add new element under first ClCompile
+          $projText = Get-Content $projPath.FullName -Raw
+
+          # Append vcpkg include path to existing AdditionalIncludeDirectories, or insert a new element under first ClCompile
           if ($projText -match '<AdditionalIncludeDirectories>(.*?)</AdditionalIncludeDirectories>') {
             $projText = [regex]::Replace($projText, '<AdditionalIncludeDirectories>(.*?)</AdditionalIncludeDirectories>', "<AdditionalIncludeDirectories>`$1;$includePath</AdditionalIncludeDirectories>")
           } else {
             $projText = [regex]::Replace($projText, '(<ClCompile.*?>)', "`$1`n      <AdditionalIncludeDirectories>$includePath;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>")
           }
 
-          # Ensure FLAC++.lib is in AdditionalDependencies for the Link element
+          # Add absolute FLAC++.lib path to AdditionalDependencies (use absolute path so MSBuild doesn't need macros)
+          $escapedFlacLib = $flacLib -replace '\\','\\'
           if ($projText -match '<AdditionalDependencies>(.*?)</AdditionalDependencies>') {
-            $projText = [regex]::Replace($projText, '<AdditionalDependencies>(.*?)</AdditionalDependencies>', "<AdditionalDependencies>`$1;$(ProjectDir)..\\..\\_temp\\vcpkg\\installed\\x64-windows\\lib\\FLAC++.lib</AdditionalDependencies>")
+            $projText = [regex]::Replace($projText, '<AdditionalDependencies>(.*?)</AdditionalDependencies>', "<AdditionalDependencies>`$1;$escapedFlacLib</AdditionalDependencies>")
           } else {
-            $projText = [regex]::Replace($projText, '(<Link.*?>)', "`$1`n      <AdditionalDependencies>$(ProjectDir)..\\..\\_temp\\vcpkg\\installed\\x64-windows\\lib\\FLAC++.lib;%(AdditionalDependencies)</AdditionalDependencies>")
+            $projText = [regex]::Replace($projText, '(<Link.*?>)', "`$1`n      <AdditionalDependencies>$escapedFlacLib;%(AdditionalDependencies)</AdditionalDependencies>")
           }
 
           # Write patched project back
@@ -84,7 +84,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          # Ensure environment variables so MSVC sees vcpkg include/lib
+          # Ensure INCLUDE and LIB env for build step
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
           $env:INCLUDE = (Join-Path $prefix 'include') + ';' + $env:INCLUDE
