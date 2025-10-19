@@ -18,6 +18,8 @@ jobs:
 
       - name: Install libFLAC static (vcpkg)
         run: |
+          set VCPKG_LIBRARY_LINKAGE=static
+          set VCPKG_CRT_LINKAGE=static
           .\vcpkg\vcpkg.exe install libflac:x64-windows-static
           .\vcpkg\vcpkg.exe install libogg:x64-windows-static
         shell: cmd
@@ -51,8 +53,8 @@ jobs:
       - name: Verify linker flags and FLAC settings
         run: |
           cmake -S . -B build -LA | findstr /I "FLAC"
-          findstr /I "/LIBPATH" build\MQA_identifier.vcxproj || echo "/LIBPATH not found in vcxproj"
-          findstr /I "FLAC++.lib" build\MQA_identifier.vcxproj || echo "FLAC++.lib not referenced in vcxproj"
+          findstr /C:"/LIBPATH" build\MQA_identifier.vcxproj || echo "/LIBPATH not found in vcxproj"
+          findstr /C:"FLAC++.lib" build\MQA_identifier.vcxproj || echo "FLAC++.lib not referenced in vcxproj"
         shell: cmd
 
       - name: Show vcpkg include dir (debug)
