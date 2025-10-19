@@ -18,7 +18,7 @@ jobs:
 
       - name: Install FLAC (vcpkg)
         run: |
-          .\vcpkg\vcpkg.exe install flac:x64-windows
+          .\vcpkg\vcpkg.exe install libflac:x64-windows
         shell: cmd
 
       - name: Configure Release build (CLI only)
