@@ -21,9 +21,29 @@ jobs:
           .\vcpkg\vcpkg.exe install libflac:x64-windows
         shell: cmd
 
-      - name: Configure Release build (CLI only)
+      - name: Install FLAC (vcpkg)
         run: |
-          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=%CD%\vcpkg\scripts\buildsystems\vcpkg.cmake -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
+          .\vcpkg\vcpkg.exe install libflac:x64-windows
+        shell: cmd
+
+      - name: Show installed FLAC files (debug)
+        run: |
+          echo Installed files in vcpkg\installed\x64-windows\include
+          dir /b /s vcpkg\installed\x64-windows\include\FLAC*
+          echo Installed lib files in vcpkg\installed\x64-windows\lib
+          dir /b /s vcpkg\installed\x64-windows\lib\*
+        shell: cmd
+
+      - name: Configure Release build (CLI only) with explicit FLAC paths
+        run: |
+          set VCPKG_DIR=%CD%\vcpkg
+          set VCPKG_INST=%VCPKG_DIR%\installed\x64-windows
+          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_TOOLCHAIN_FILE=%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake ^
+            -DFLAC_INCLUDE_DIR="%VCPKG_INST%\include" ^
+            -DFLACPP_INCLUDE_DIR="%VCPKG_INST%\include" ^
+            -DFLAC_LIBRARY="%VCPKG_INST%\lib\flac.lib" ^
+            -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
         shell: cmd
 
       - name: Build Release
