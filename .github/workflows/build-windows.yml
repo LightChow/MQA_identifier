@@ -41,9 +41,16 @@ jobs:
           cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_TOOLCHAIN_FILE=%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake ^
             -DFLAC_INCLUDE_DIR="%VCPKG_INST%\include" ^
+            -DFLAC_LIBRARY="%VCPKG_INST%\lib\FLAC.lib" ^
             -DFLACPP_INCLUDE_DIR="%VCPKG_INST%\include" ^
-            -DFLAC_LIBRARY="%VCPKG_INST%\lib\flac.lib" ^
+            -DFLACPP_LIBRARY="%VCPKG_INST%\lib\FLAC++.lib" ^
+            -DFLACPP_INCLUDE_DIRS="%VCPKG_INST%\include" ^
             -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
+        shell: cmd
+
+      - name: Dump CMake cache for FLAC
+        run: |
+          cmake -S . -B build -LA | findstr /I "FLAC"
         shell: cmd
 
       - name: Build Release
