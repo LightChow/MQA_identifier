@@ -33,6 +33,21 @@ jobs:
           Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
           Pop-Location
 
+      - name: Copy FLAC++ headers into repo include so MSVC finds them
+        shell: pwsh
+        run: |
+          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          $src = Join-Path $vcpkgRoot 'installed\x64-windows\include\FLAC++'
+          Write-Host "Source FLAC++ headers: $src"
+          if (-not (Test-Path $src)) { Write-Host "ERROR: FLAC++ headers not found at $src"; exit 1 }
+          $destRoot = Join-Path $env:GITHUB_WORKSPACE 'include'
+          $dest = Join-Path $destRoot 'FLAC++'
+          Write-Host "Copying FLAC++ headers to repository include folder: $dest"
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Copy-Item -Path (Join-Path $src '*') -Destination $dest -Recurse -Force
+          Write-Host "Copied files:"
+          Get-ChildItem -Path $dest -Recurse | ForEach-Object { Write-Host $_.FullName }
+
       - name: Configure with CMake (using vcpkg toolchain)
         shell: pwsh
         run: |
@@ -42,53 +57,37 @@ jobs:
           Push-Location build
           cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows"
           if ($LASTEXITCODE -ne 0) {
-            Write-Host 'CMake configure failed'; if (Test-Path 'CMakeFiles\CMakeError.log') { Get-Content 'CMakeFiles\CMakeError.log' | ForEach-Object { Write-Host $_ } }; exit $LASTEXITCODE
+            Write-Host 'CMake configure failed'
+            if (Test-Path 'CMakeFiles\CMakeError.log') { Get-Content 'CMakeFiles\CMakeError.log' | ForEach-Object { Write-Host $_ } }
+            if (Test-Path 'CMakeFiles\CMakeOutput.log') { Get-Content 'CMakeFiles\CMakeOutput.log' | ForEach-Object { Write-Host $_ } }
+            exit $LASTEXITCODE
           }
           if (Test-Path 'CMakeCache.txt') { Select-String -Path CMakeCache.txt -Pattern FLAC -SimpleMatch | ForEach-Object { Write-Host $_ } }
           Pop-Location
 
-      - name: Patch generated project to add vcpkg include and FLAC++ lib
+      - name: Diagnostic - show generated project info
         shell: pwsh
         run: |
-          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
-          $includePath = Join-Path $prefix 'include'
-          $libPath = Join-Path $prefix 'lib'
-          $flacLib = Join-Path $libPath 'FLAC++.lib'
-          Write-Host "Patching project to add include: $includePath and lib: $flacLib"
-
-          $projPath = Get-ChildItem -Path build -Filter 'MQA_identifier.vcxproj' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $projPath) { Write-Host "Could not find MQA_identifier.vcxproj in build; aborting patch"; exit 1 }
-
-          $projText = Get-Content $projPath.FullName -Raw
-
-          # Append vcpkg include path to existing AdditionalIncludeDirectories, or insert a new element under first ClCompile
-          if ($projText -match '<AdditionalIncludeDirectories>(.*?)</AdditionalIncludeDirectories>') {
-            $projText = [regex]::Replace($projText, '<AdditionalIncludeDirectories>(.*?)</AdditionalIncludeDirectories>', "<AdditionalIncludeDirectories>`$1;$includePath</AdditionalIncludeDirectories>")
+          if (Test-Path build) {
+            Write-Host "Listing build files"
+            Get-ChildItem -Path build -Recurse -File | ForEach-Object { Write-Host $_.FullName }
+            $proj = Get-ChildItem -Path build -Filter '*.vcxproj' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($proj) {
+              Write-Host 'Project file:' $proj.FullName
+              Write-Host 'AdditionalIncludeDirectories:'
+              Select-String -Path $proj.FullName -Pattern 'AdditionalIncludeDirectories' -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
+              Write-Host 'AdditionalDependencies:'
+              Select-String -Path $proj.FullName -Pattern 'AdditionalDependencies' -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
+            } else {
+              Write-Host 'No .vcxproj found.'
+            }
           } else {
-            $projText = [regex]::Replace($projText, '(<ClCompile.*?>)', "`$1`n      <AdditionalIncludeDirectories>$includePath;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>")
+            Write-Host 'No build directory present.'
           }
-
-          # Add absolute FLAC++.lib path to AdditionalDependencies (use absolute path so MSBuild doesn't need macros)
-          $escapedFlacLib = $flacLib -replace '\\','\\'
-          if ($projText -match '<AdditionalDependencies>(.*?)</AdditionalDependencies>') {
-            $projText = [regex]::Replace($projText, '<AdditionalDependencies>(.*?)</AdditionalDependencies>', "<AdditionalDependencies>`$1;$escapedFlacLib</AdditionalDependencies>")
-          } else {
-            $projText = [regex]::Replace($projText, '(<Link.*?>)', "`$1`n      <AdditionalDependencies>$escapedFlacLib;%(AdditionalDependencies)</AdditionalDependencies>")
-          }
-
-          # Write patched project back
-          $projText | Out-File -FilePath $projPath.FullName -Encoding utf8
-          Write-Host "Patched project: $($projPath.FullName)"
 
       - name: Build
         shell: pwsh
         run: |
-          # Ensure INCLUDE and LIB env for build step
-          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
-          $env:INCLUDE = (Join-Path $prefix 'include') + ';' + $env:INCLUDE
-          $env:LIB = (Join-Path $prefix 'lib') + ';' + $env:LIB
           Push-Location build
           cmake --build . --config Release -- /m
           Pop-Location
