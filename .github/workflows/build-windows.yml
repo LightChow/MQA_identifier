@@ -18,7 +18,7 @@ jobs:
         with:
           cmake-version: "4.0.3"
 
-      - name: Setup vcpkg and install libflac
+      - name: "Setup vcpkg and install libflac"
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
@@ -29,18 +29,22 @@ jobs:
           Push-Location $vcpkgRoot
           Write-Host "Bootstrapping vcpkg (batch bootstrap)"
           & .\bootstrap-vcpkg.bat
-          if ($LASTEXITCODE -ne 0) { Write-Host "bootstrap-vcpkg.bat failed with exit code $LASTEXITCODE"; exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'bootstrap-vcpkg.bat failed with exit code' $LASTEXITCODE
+            exit $LASTEXITCODE
+          }
           Write-Host "Installing libflac for triplet x64-windows (provides FLAC and FLAC++ CMake targets)"
           & .\vcpkg.exe install libflac --triplet x64-windows
-          if ($LASTEXITCODE -ne 0) { Write-Host "vcpkg install libflac failed with exit code $LASTEXITCODE"; exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'vcpkg install libflac failed with exit code' $LASTEXITCODE
+            exit $LASTEXITCODE
+          }
           Write-Host "vcpkg installed packages at: $vcpkgRoot\installed\x64-windows"
-          Write-Host "Listing installed include files (top-level):"
-          Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse | ForEach-Object { Write-Host $_.FullName }
-          Write-Host "Listing installed share directories (top-level):"
-          Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\share" -Recurse | ForEach-Object { Write-Host $_.FullName }
+          Write-Host "Listing installed include files (top-level)"
+          Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
           Pop-Location
 
-      - name: Configure with CMake (using vcpkg toolchain) and write CMakeCache
+      - name: "Configure with CMake (using vcpkg toolchain)"
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
@@ -52,35 +56,35 @@ jobs:
           Push-Location build
           $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
           $flacShare = Join-Path $prefix 'share\flac'
-          Write-Host "CMAKE_PREFIX_PATH = $prefix"
-          Write-Host "FLAC_DIR = $flacShare"
+          Write-Host 'CMAKE_PREFIX_PATH = ' $prefix
+          Write-Host 'FLAC_DIR = ' $flacShare
           cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$prefix" -DFLAC_DIR="$flacShare"
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "CMake configure failed. Printing CMake output files for diagnosis (if present):"
-            if (Test-Path "CMakeFiles\CMakeError.log") { Get-Content "CMakeFiles\CMakeError.log" | ForEach-Object { Write-Host $_ } }
-            if (Test-Path "CMakeFiles\CMakeOutput.log") { Get-Content "CMakeFiles\CMakeOutput.log" | ForEach-Object { Write-Host $_ } }
+            Write-Host 'CMake configure failed. Printing CMake output files for diagnosis (if present).'
+            if (Test-Path 'CMakeFiles\CMakeError.log') { Get-Content 'CMakeFiles\CMakeError.log' | ForEach-Object { Write-Host $_ } }
+            if (Test-Path 'CMakeFiles\CMakeOutput.log') { Get-Content 'CMakeFiles\CMakeOutput.log' | ForEach-Object { Write-Host $_ } }
             exit $LASTEXITCODE
           }
-          Write-Host "CMake configure succeeded. Showing CMakeCache.txt excerpt for FLAC:"
-          if (Test-Path "CMakeCache.txt") { Select-String -Path CMakeCache.txt -Pattern "FLAC" -CaseSensitive | ForEach-Object { Write-Host $_ } }
+          Write-Host 'CMake configure succeeded. Showing CMakeCache entry for FLAC (if present).'
+          if (Test-Path 'CMakeCache.txt') { Select-String -Path CMakeCache.txt -Pattern FLAC -SimpleMatch | ForEach-Object { Write-Host $_ } }
           Pop-Location
 
-      - name: Diagnostic: show build files and generated project info
+      - name: "Diagnostic - show build files and generated project info"
         shell: pwsh
         run: |
           if (Test-Path build) {
-            Write-Host "Listing build folder files:"
+            Write-Host "Listing build folder files"
             Get-ChildItem -Path build -Recurse -File | ForEach-Object { Write-Host $_.FullName }
-            $proj = Get-ChildItem -Path build -Filter "*.vcxproj" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            $proj = Get-ChildItem -Path build -Filter '*.vcxproj' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($proj) {
-              Write-Host "Project file found: $($proj.FullName)"
-              Write-Host "Searching for AdditionalIncludeDirectories in project file:"
-              Select-String -Path $proj.FullName -Pattern "AdditionalIncludeDirectories" -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
+              Write-Host 'Project file found:' $proj.FullName
+              Write-Host 'Searching for AdditionalIncludeDirectories in project file:'
+              Select-String -Path $proj.FullName -Pattern 'AdditionalIncludeDirectories' -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
             } else {
-              Write-Host "No .vcxproj found yet (configure may have failed)."
+              Write-Host 'No .vcxproj found yet.'
             }
           } else {
-            Write-Host "No build directory present."
+            Write-Host 'No build directory present.'
           }
 
       - name: Build
@@ -94,12 +98,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifact -Force | Out-Null
-          if (Test-Path "build\Release\mqa_identifier.exe") {
-            Copy-Item "build\Release\mqa_identifier.exe" "artifact\mqa_identifier.exe"
-          } elseif (Test-Path "build\mqa_identifier.exe") {
-            Copy-Item "build\mqa_identifier.exe" "artifact\mqa_identifier.exe"
+          if (Test-Path 'build\Release\mqa_identifier.exe') {
+            Copy-Item 'build\Release\mqa_identifier.exe' 'artifact\mqa_identifier.exe'
+          } elseif (Test-Path 'build\mqa_identifier.exe') {
+            Copy-Item 'build\mqa_identifier.exe' 'artifact\mqa_identifier.exe'
           } else {
-            Write-Host "ERROR: executable not found; listing build directory for debugging:"
+            Write-Host 'ERROR: executable not found; listing build directory for debugging'
             Get-ChildItem -Recurse build | ForEach-Object { Write-Host $_.FullName }
             exit 1
           }
