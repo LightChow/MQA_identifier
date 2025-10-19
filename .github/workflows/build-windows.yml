@@ -29,20 +29,18 @@ jobs:
           Push-Location $vcpkgRoot
           Write-Host "Bootstrapping vcpkg (batch bootstrap)"
           & .\bootstrap-vcpkg.bat
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "bootstrap-vcpkg.bat failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
-          Write-Host "Installing libflac for x64-windows triplet (this provides FLAC and FLAC++ CMake targets)"
+          if ($LASTEXITCODE -ne 0) { Write-Host "bootstrap failed"; exit $LASTEXITCODE }
+          Write-Host "Installing libflac for x64-windows triplet (provides FLAC and FLAC++ CMake targets)"
           & .\vcpkg.exe install libflac --triplet x64-windows
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: vcpkg install libflac failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
+          if ($LASTEXITCODE -ne 0) { Write-Host "vcpkg install libflac failed"; exit $LASTEXITCODE }
           Write-Host "vcpkg installed packages at: $vcpkgRoot\installed\x64-windows"
+          Write-Host "Listing installed include files (top-level):"
+          Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse -Depth 2 | ForEach-Object { Write-Host $_.FullName }
+          Write-Host "Listing installed cmake config dirs (share):"
+          Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\share" -Recurse -Depth 2 | ForEach-Object { Write-Host $_.FullName }
           Pop-Location
 
-      - name: Configure with CMake (using vcpkg toolchain)
+      - name: Configure with CMake (using vcpkg toolchain) and write CMakeCache
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
@@ -52,8 +50,37 @@ jobs:
           Write-Host "Using vcpkg toolchain: $toolchain"
           New-Item -ItemType Directory -Path build -Force | Out-Null
           Push-Location build
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$vcpkgRoot\installed\x64-windows"
+          # Add CMAKE_PREFIX_PATH to help find FLAC config files and pass an explicit FLAC_DIR hint pointing at vcpkg share directory
+          $prefix = Join-Path $vcpkgRoot 'installed\x64-windows'
+          $flacShare = Join-Path $prefix 'share\flac'
+          Write-Host "CMAKE_PREFIX_PATH = $prefix"
+          Write-Host "FLAC share dir = $flacShare"
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$prefix" -DFLAC_DIR="$flacShare"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "CMake configure failed. Printing CMake output files for diagnosis:"
+            if (Test-Path "CMakeFiles\CMakeError.log") { Get-Content CMakeFiles\CMakeError.log | ForEach-Object { Write-Host $_ } }
+            if (Test-Path "CMakeFiles\CMakeOutput.log") { Get-Content CMakeFiles\CMakeOutput.log | ForEach-Object { Write-Host $_ } }
+            exit $LASTEXITCODE
+          }
+          Write-Host "CMake configure succeeded. Showing CMakeCache.txt excerpt for FLAC/FLAC++:"
+          if (Test-Path "CMakeCache.txt") { Select-String -Path CMakeCache.txt -Pattern "FLAC" -CaseSensitive | ForEach-Object { Write-Host $_ } }
           Pop-Location
+
+      - name: Diagnostic: show build .vcxproj and include dirs picked up by MSBuild (before compile)
+        shell: pwsh
+        run: |
+          if (Test-Path build) {
+            Write-Host "Listing build folder:"
+            Get-ChildItem -Path build -Recurse -File | ForEach-Object { Write-Host $_.FullName }
+            Write-Host "Display generated project file (if present):"
+            $proj = Get-ChildItem -Path build -Filter "*.vcxproj" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($proj) {
+              Write-Host "Project file: $($proj.FullName)"
+              Select-String -Path $proj.FullName -Pattern "AdditionalIncludeDirectories" -SimpleMatch -Context 0,1 | ForEach-Object { Write-Host $_.ToString() }
+            } else { Write-Host "No .vcxproj found yet." }
+          } else {
+            Write-Host "No build directory found."
+          }
 
       - name: Build
         shell: pwsh
