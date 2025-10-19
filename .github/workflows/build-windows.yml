@@ -34,17 +34,20 @@ jobs:
           dir /b /s vcpkg\installed\x64-windows\lib\*
         shell: cmd
 
-      - name: Configure Release build (CLI only) with explicit FLAC paths
+      - name: Configure Release build (force include paths)
         run: |
           set VCPKG_DIR=%CD%\vcpkg
           set VCPKG_INST=%VCPKG_DIR%\installed\x64-windows
           cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_TOOLCHAIN_FILE=%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake ^
             -DFLAC_INCLUDE_DIR="%VCPKG_INST%\include" ^
-            -DFLAC_LIBRARY="%VCPKG_INST%\lib\FLAC.lib" ^
             -DFLACPP_INCLUDE_DIR="%VCPKG_INST%\include" ^
-            -DFLACPP_LIBRARY="%VCPKG_INST%\lib\FLAC++.lib" ^
             -DFLACPP_INCLUDE_DIRS="%VCPKG_INST%\include" ^
+            -DFLAC++_INCLUDE_DIR="%VCPKG_INST%\include" ^
+            -DFLAC++_LIBRARIES="%VCPKG_INST%\lib\FLAC++.lib" ^
+            -DFLAC_LIBRARY="%VCPKG_INST%\lib\FLAC.lib" ^
+            -DCMAKE_CXX_FLAGS="/I%VCPKG_INST%\include" ^
+            -DCMAKE_CXX_FLAGS_RELEASE="/I%VCPKG_INST%\include" ^
             -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
         shell: cmd
 
