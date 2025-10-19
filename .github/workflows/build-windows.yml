@@ -5,28 +5,29 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup CMake (already on runner, ensures PATH)
-        uses: lukka/get-cmake@v4
-
       - name: Configure Release build
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DENABLE_QT=OFF
+        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
 
       - name: Build Release
         run: cmake --build build --config Release -- /m
 
-      - name: Collect EXE
+      - name: Prepare artifact folder
         run: |
           mkdir output
-          copy build\Release\MQA_identifier.exe output\MQA_identifier.exe
+          rem copy executable
+          if exist build\Release\MQA_identifier.exe copy build\Release\MQA_identifier.exe output\
+          if exist build\MQA_identifier.exe copy build\MQA_identifier.exe output\
+          rem copy any DLLs alongside the EXE (adjust names if needed)
+          for %%f in (build\Release\*.dll) do copy %%f output\  || echo no-dlls
         shell: cmd
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: MQA_identifier-windows
-          path: output/MQA_identifier.exe
+          path: output
