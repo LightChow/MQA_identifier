@@ -66,6 +66,16 @@ jobs:
         run: cmake --build build --config Release -- /m
         shell: cmd
 
+      - name: Find any FLAC DLLs (debug)
+        run: |
+          echo "search vcpkg installed bin"
+          dir /b /s vcpkg\installed\x64-windows\bin\*FLAC*.dll || echo none
+          echo "search vcpkg installed lib"
+          dir /b /s vcpkg\installed\x64-windows\lib\*FLAC*.dll || echo none
+          echo "search repo tree"
+          dir /b /s *FLAC*.dll || echo none
+        shell: cmd
+
       - name: Prepare artifact folder (include vcpkg DLLs)
         run: |
           mkdir output
