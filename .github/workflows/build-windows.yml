@@ -1,33 +1,45 @@
-name: Build MQA_identifier Windows Release
+name: Build MQA_identifier Windows CLI Release
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build-windows-cli:
     runs-on: windows-2025
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Release build
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+      - name: Set up vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          .\vcpkg\bootstrap-vcpkg.bat
+        shell: cmd
+
+      - name: Install FLAC (vcpkg)
+        run: |
+          .\vcpkg\vcpkg.exe install flac:x64-windows
+        shell: cmd
+
+      - name: Configure Release build (CLI only)
+        run: |
+          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=%CD%\vcpkg\scripts\buildsystems\vcpkg.cmake -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
+        shell: cmd
 
       - name: Build Release
         run: cmake --build build --config Release -- /m
+        shell: cmd
 
       - name: Prepare artifact folder
         run: |
           mkdir output
-          rem copy executable
           if exist build\Release\MQA_identifier.exe copy build\Release\MQA_identifier.exe output\
           if exist build\MQA_identifier.exe copy build\MQA_identifier.exe output\
-          rem copy any DLLs alongside the EXE (adjust names if needed)
           for %%f in (build\Release\*.dll) do copy %%f output\  || echo no-dlls
         shell: cmd
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MQA_identifier-windows
+          name: MQA_identifier-windows-cli
           path: output
