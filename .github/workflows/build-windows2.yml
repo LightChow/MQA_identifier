@@ -42,7 +42,7 @@ jobs:
             -DENABLE_QT=OFF -DQT_FOUND=OFF -DGUI=OFF
         shell: cmd
 
-      - name: Debug: show vcpkg include dir
+      - name: Show vcpkg include dir (debug)
         run: |
           echo "Contents of vcpkg include (static)"
           dir /b /s vcpkg\installed\x64-windows-static\include\FLAC* || echo "not found"
