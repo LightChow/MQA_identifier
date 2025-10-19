@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: "Setup CMake"
+      - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: "4.0.3"
@@ -40,11 +40,11 @@ jobs:
             exit $LASTEXITCODE
           }
           Write-Host "vcpkg installed packages at: $vcpkgRoot\installed\x64-windows"
-          Write-Host "Listing installed include files (top-level)"
+          Write-Host "Listing installed include files (please copy these lines if the build still fails):"
           Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
           Pop-Location
 
-      - name: "Configure with CMake (using vcpkg toolchain and explicit include/lib hints)"
+      - name: "Configure with CMake (vcpkg toolchain + forced include flags)"
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
@@ -62,15 +62,18 @@ jobs:
           Write-Host 'CMAKE_INCLUDE_PATH = ' $includePath
           Write-Host 'CMAKE_LIBRARY_PATH = ' $libPath
           Write-Host 'FLAC_DIR = ' $flacShare
-          # Pass vcpkg toolchain plus explicit include/lib paths and CMAKE_PREFIX_PATH to help find FLAC++ headers
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_INCLUDE_PATH="$includePath" -DCMAKE_LIBRARY_PATH="$libPath" -DFLAC_DIR="$flacShare"
+          # Force the MSVC compiler to add the vcpkg include path so FLAC++ headers are visible.
+          # Note: CMake will still use the vcpkg toolchain, but these flags guarantee the /I path for MSVC.
+          $cxxFlags = "/I`"$includePath`""
+          $cFlags  = "/I`"$includePath`""
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_INCLUDE_PATH="$includePath" -DCMAKE_LIBRARY_PATH="$libPath" -DFLAC_DIR="$flacShare" -DCMAKE_CXX_FLAGS="$cxxFlags" -DCMAKE_C_FLAGS="$cFlags"
           if ($LASTEXITCODE -ne 0) {
-            Write-Host 'CMake configure failed. Printing CMake output files for diagnosis (if present).'
+            Write-Host 'CMake configure failed. Printing CMake output logs if present.'
             if (Test-Path 'CMakeFiles\CMakeError.log') { Get-Content 'CMakeFiles\CMakeError.log' | ForEach-Object { Write-Host $_ } }
             if (Test-Path 'CMakeFiles\CMakeOutput.log') { Get-Content 'CMakeFiles\CMakeOutput.log' | ForEach-Object { Write-Host $_ } }
             exit $LASTEXITCODE
           }
-          Write-Host 'CMake configure succeeded. Showing CMakeCache entry for FLAC (if present).'
+          Write-Host 'CMake configure succeeded. Please copy any lines shown below that mention FLAC or FLAC++ from CMakeCache.txt:'
           if (Test-Path 'CMakeCache.txt') { Select-String -Path CMakeCache.txt -Pattern FLAC -SimpleMatch | ForEach-Object { Write-Host $_ } }
           Pop-Location
 
