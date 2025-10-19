@@ -1,113 +1,32 @@
-name: Build MQA Identifier Windows EXE
+name: Build MQA_identifier Windows Release
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup CMake
-        uses: jwlawson/actions-setup-cmake@v2
-        with:
-          cmake-version: "4.0.3"
+      - name: Setup CMake (already on runner, ensures PATH)
+        uses: lukka/get-cmake@v4
 
-      - name: Setup vcpkg and install libflac
-        shell: pwsh
-        run: |
-          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          Write-Host "vcpkg root: $vcpkgRoot"
-          git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-          Push-Location $vcpkgRoot
-          & .\bootstrap-vcpkg.bat
-          if ($LASTEXITCODE -ne 0) { Write-Host 'bootstrap failed' ; exit $LASTEXITCODE }
-          & .\vcpkg.exe install libflac --triplet x64-windows
-          if ($LASTEXITCODE -ne 0) { Write-Host 'vcpkg install failed' ; exit $LASTEXITCODE }
-          Write-Host "vcpkg installed at: $vcpkgRoot\installed\x64-windows"
-          Get-ChildItem -Path "$vcpkgRoot\installed\x64-windows\include" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-          Pop-Location
+      - name: Configure Release build
+        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DENABLE_QT=OFF
 
-      - name: Copy FLAC++ headers into repo include so MSVC finds them
-        shell: pwsh
-        run: |
-          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          $src = Join-Path $vcpkgRoot 'installed\x64-windows\include\FLAC++'
-          Write-Host "Source FLAC++ headers: $src"
-          if (-not (Test-Path $src)) { Write-Host "ERROR: FLAC++ headers not found at $src"; exit 1 }
-          $destRoot = Join-Path $env:GITHUB_WORKSPACE 'include'
-          $dest = Join-Path $destRoot 'FLAC++'
-          Write-Host "Copying FLAC++ headers to repository include folder: $dest"
-          New-Item -ItemType Directory -Path $dest -Force | Out-Null
-          Copy-Item -Path (Join-Path $src '*') -Destination $dest -Recurse -Force
-          Write-Host "Copied files:"
-          Get-ChildItem -Path $dest -Recurse | ForEach-Object { Write-Host $_.FullName }
+      - name: Build Release
+        run: cmake --build build --config Release -- /m
 
-      - name: Configure with CMake (using vcpkg toolchain)
-        shell: pwsh
+      - name: Collect EXE
         run: |
-          $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          $toolchain = Join-Path $vcpkgRoot 'scripts\buildsystems\vcpkg.cmake'
-          New-Item -ItemType Directory -Path build -Force | Out-Null
-          Push-Location build
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows"
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host 'CMake configure failed'
-            if (Test-Path 'CMakeFiles\CMakeError.log') { Get-Content 'CMakeFiles\CMakeError.log' | ForEach-Object { Write-Host $_ } }
-            if (Test-Path 'CMakeFiles\CMakeOutput.log') { Get-Content 'CMakeFiles\CMakeOutput.log' | ForEach-Object { Write-Host $_ } }
-            exit $LASTEXITCODE
-          }
-          if (Test-Path 'CMakeCache.txt') { Select-String -Path CMakeCache.txt -Pattern FLAC -SimpleMatch | ForEach-Object { Write-Host $_ } }
-          Pop-Location
-
-      - name: Diagnostic - show generated project info
-        shell: pwsh
-        run: |
-          if (Test-Path build) {
-            Write-Host "Listing build files"
-            Get-ChildItem -Path build -Recurse -File | ForEach-Object { Write-Host $_.FullName }
-            $proj = Get-ChildItem -Path build -Filter '*.vcxproj' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($proj) {
-              Write-Host 'Project file:' $proj.FullName
-              Write-Host 'AdditionalIncludeDirectories:'
-              Select-String -Path $proj.FullName -Pattern 'AdditionalIncludeDirectories' -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
-              Write-Host 'AdditionalDependencies:'
-              Select-String -Path $proj.FullName -Pattern 'AdditionalDependencies' -SimpleMatch | ForEach-Object { Write-Host $_.ToString() }
-            } else {
-              Write-Host 'No .vcxproj found.'
-            }
-          } else {
-            Write-Host 'No build directory present.'
-          }
-
-      - name: Build
-        shell: pwsh
-        run: |
-          Push-Location build
-          cmake --build . --config Release -- /m
-          Pop-Location
-
-      - name: Collect artifact
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path artifact -Force | Out-Null
-          if (Test-Path 'build\Release\mqa_identifier.exe') {
-            Copy-Item 'build\Release\mqa_identifier.exe' 'artifact\mqa_identifier.exe'
-          } elseif (Test-Path 'build\mqa_identifier.exe') {
-            Copy-Item 'build\mqa_identifier.exe' 'artifact\mqa_identifier.exe'
-          } else {
-            Write-Host 'ERROR: executable not found; listing build directory for debugging'
-            Get-ChildItem -Recurse build | ForEach-Object { Write-Host $_.FullName }
-            exit 1
-          }
+          mkdir output
+          copy build\Release\MQA_identifier.exe output\MQA_identifier.exe
+        shell: cmd
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mqa-identifier-windows
-          path: artifact\mqa_identifier.exe
+          name: MQA_identifier-windows
+          path: output/MQA_identifier.exe
